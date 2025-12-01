@@ -18,6 +18,9 @@ internal struct SecureStoreOptions: Record {
 
   @Field
   var enableDeviceFallback: Bool = false
+
+  @Field
+  var forceAuthenticationOnSave: Bool = false
 }
 
 @available(iOS 11.2, *)
@@ -46,5 +49,12 @@ struct SecureStoreFeedback<T> {
   var authType: Int = AuthType.none.rawValue
   var values: Array<Any> {
     get { return [value, authType] }
+  }
+}
+
+struct SecureStoreRuntimeError: LocalizedError {
+  let errorDescription: String?
+  init(_ description: String) {
+    self.errorDescription = description
   }
 }
