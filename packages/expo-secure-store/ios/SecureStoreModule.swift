@@ -16,28 +16,40 @@ public final class SecureStoreModule: Module {
     Constant("WHEN_UNLOCKED") { SecureStoreAccessible.whenUnlocked.rawValue }
     Constant("WHEN_UNLOCKED_THIS_DEVICE_ONLY") { SecureStoreAccessible.whenUnlockedThisDeviceOnly.rawValue }
 
-    AsyncFunction("getValueWithKeyAsync") { (key: String, options: SecureStoreOptions) -> String? in
-      return try get(with: key, options: options)
+    AsyncFunction("getValueWithKeyAsync") { (key: String, options: SecureStoreOptions) in
+      return getSecureStoreFeedback(value: try get(with: key, options: options)).values
     }
 
-    Function("getValueWithKeySync") { (key: String, options: SecureStoreOptions) -> String? in
-      return try get(with: key, options: options)
+    Function("getValueWithKeySync") { (key: String, options: SecureStoreOptions) in
+      return getSecureStoreFeedback(value: try get(with: key, options: options)).values
     }
 
-    AsyncFunction("setValueWithKeyAsync") { (value: String, key: String, options: SecureStoreOptions) -> Bool in
+    AsyncFunction("setValueWithKeyAsync") { (value: String, key: String, options: SecureStoreOptions) -> Int in
       guard let key = validate(for: key) else {
         throw InvalidKeyException()
       }
 
-      return try set(value: value, with: key, options: options)
+      let result = try set(value: value, with: key, options: options)
+
+      if !result {
+        return AuthType.none.rawValue
+      }
+
+      return getSecureStoreFeedback(value: true).authType
     }
 
-    Function("setValueWithKeySync") {(value: String, key: String, options: SecureStoreOptions) -> Bool in
+    Function("setValueWithKeySync") {(value: String, key: String, options: SecureStoreOptions) -> Int in
       guard let key = validate(for: key) else {
         throw InvalidKeyException()
       }
 
-      return try set(value: value, with: key, options: options)
+      let result = try set(value: value, with: key, options: options)
+
+      if !result {
+        return AuthType.none.rawValue
+      }
+
+      return getSecureStoreFeedback(value: true).authType
     }
 
     AsyncFunction("deleteValueWithKeyAsync") { (key: String, options: SecureStoreOptions) in
@@ -51,23 +63,37 @@ public final class SecureStoreModule: Module {
     }
 
     Function("canUseBiometricAuthentication") {() -> Bool in
-      #if os(tvOS)
-      return false
-      #else
-      let context = LAContext()
-      var error: NSError?
-      let isBiometricsSupported: Bool = context.canEvaluatePolicy(LAPolicy.deviceOwnerAuthenticationWithBiometrics, error: &error)
-
-      if error != nil {
-        return false
-      }
-      return isBiometricsSupported
-      #endif
+      return areBiometricsEnabled()
     }
 
     Function("canUseDeviceCredentialsAuthentication") { () -> Bool in
       return areDeviceCredentialsEnabled()
     }
+  }
+
+  private func getAuthType() -> AuthType {
+    if !areBiometricsEnabled() {return AuthType.credentials}
+    let biometryType = LAContext().biometryType
+
+    switch biometryType {
+      case .faceID: return .faceID
+      case .touchID: return .touchID
+      case .opticID: return .opticID // available since iOS 17
+      case .none: fallthrough // this one continues to the next line
+      @unknown default: return .credentials
+    }
+  }
+
+  private func getSecureStoreFeedback<T>(value: T) -> SecureStoreFeedback<T> {
+    return SecureStoreFeedback(value: value, authType: getAuthType().rawValue)
+  }
+
+  private func areBiometricsEnabled() -> Bool {
+    #if os(tvOS)
+      return false
+    #else
+      return LAContext().canEvaluatePolicy(LAPolicy.deviceOwnerAuthenticationWithBiometrics, error: nil)
+    #endif
   }
 
   private func areDeviceCredentialsEnabled() -> Bool {
@@ -94,6 +120,29 @@ public final class SecureStoreModule: Module {
     return nil
   }
 
+  private func NSFaceIDUsageEntryGuard(options: SecureStoreOptions) throws {
+    if (options.enableDeviceFallback) {
+        return;
+    }
+
+    guard let _ = Bundle.main.infoDictionary?["NSFaceIDUsageDescription"] as? String else {
+      throw MissingPlistKeyException()
+    }
+  }
+
+  private func getAccessOptions(options: SecureStoreOptions, accessibility: CFString) throws -> SecAccessControl {
+    var error: Unmanaged<CFError>? = nil
+
+    let accessControlFlag: SecAccessControlCreateFlags = options.enableDeviceFallback ? .userPresence : .biometryCurrentSet
+
+    guard let accessOptions = SecAccessControlCreateWithFlags(kCFAllocatorDefault, accessibility, accessControlFlag, &error) else {
+      let errorCode = error.map { CFErrorGetCode($0.takeRetainedValue()) }
+      throw SecAccessControlError(errorCode)
+    }
+
+    return accessOptions
+  }
+
   private func set(value: String, with key: String, options: SecureStoreOptions) throws -> Bool {
     var setItemQuery = query(with: key, options: options, requireAuthentication: options.requireAuthentication)
 
@@ -105,21 +154,8 @@ public final class SecureStoreModule: Module {
     if !options.requireAuthentication {
       setItemQuery[kSecAttrAccessible as String] = accessibility
     } else {
-      if (!options.enableDeviceFallback) {
-        guard let _ = Bundle.main.infoDictionary?["NSFaceIDUsageDescription"] as? String else {
-          throw MissingPlistKeyException()
-        }
-      }
-
-      var error: Unmanaged<CFError>? = nil
-
-      let accessControlFlag: SecAccessControlCreateFlags = options.enableDeviceFallback ? .userPresence : .biometryCurrentSet
-
-      guard let accessOptions = SecAccessControlCreateWithFlags(kCFAllocatorDefault, accessibility, accessControlFlag, &error) else {
-        let errorCode = error.map { CFErrorGetCode($0.takeRetainedValue()) }
-        throw SecAccessControlError(errorCode)
-      }
-      setItemQuery[kSecAttrAccessControl as String] = accessOptions
+      try NSFaceIDUsageEntryGuard(options: options)
+      setItemQuery[kSecAttrAccessControl as String] = try getAccessOptions(options: options, accessibility: accessibility)
     }
 
     let status = SecItemAdd(setItemQuery as CFDictionary, nil)

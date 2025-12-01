@@ -20,12 +20,12 @@ class AuthenticationHelper(
 ) {
   private var isAuthenticating = false
 
-  suspend fun authenticateCipher(cipher: Cipher, requiresAuthentication: Boolean, title: String, enableDeviceFallback: Boolean): Cipher {
-    if (requiresAuthentication) {
-      return openAuthenticationPrompt(cipher, title, enableDeviceFallback).cryptoObject?.cipher
-        ?: throw AuthenticationException("Couldn't get cipher from authentication result")
+  suspend fun authenticateCipher(cipher: Cipher, title: String, enableDeviceFallback: Boolean): BiometricPrompt.AuthenticationResult {
+    val promptResult = openAuthenticationPrompt(cipher, title, enableDeviceFallback)
+    if (promptResult.cryptoObject?.cipher == null) {
+      throw AuthenticationException("Couldn't get cipher from authentication result")
     }
-    return cipher
+    return promptResult
   }
 
   private suspend fun openAuthenticationPrompt(

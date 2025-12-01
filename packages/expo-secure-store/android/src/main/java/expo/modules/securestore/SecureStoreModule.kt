@@ -36,23 +36,23 @@ open class SecureStoreModule : Module() {
 
     AsyncFunction("setValueWithKeyAsync") Coroutine { value: String?, key: String?, options: SecureStoreOptions ->
       key ?: throw NullKeyException()
-      return@Coroutine setItemImpl(key, value, options, false)
+      return@Coroutine setItemImpl(key, value, options, false).ordinal
     }
 
     AsyncFunction("getValueWithKeyAsync") Coroutine { key: String, options: SecureStoreOptions ->
-      return@Coroutine getItemImpl(key, options)
+      return@Coroutine getItemImpl(key, options).values
     }
 
     Function("setValueWithKeySync") { value: String?, key: String?, options: SecureStoreOptions ->
       key ?: throw NullKeyException()
       return@Function runBlocking {
-        return@runBlocking setItemImpl(key, value, options, keyIsInvalidated = false)
+        return@runBlocking setItemImpl(key, value, options, keyIsInvalidated = false).ordinal
       }
     }
 
     Function("getValueWithKeySync") { key: String, options: SecureStoreOptions ->
       return@Function runBlocking {
-        return@runBlocking getItemImpl(key, options)
+        return@runBlocking getItemImpl(key, options).values
       }
     }
 
@@ -94,7 +94,7 @@ open class SecureStoreModule : Module() {
     }
   }
 
-  private suspend fun getItemImpl(key: String, options: SecureStoreOptions): String? {
+  private suspend fun getItemImpl(key: String, options: SecureStoreOptions): SecureStoreFeedback<out String?> {
     // We use a SecureStore-specific shared preferences file, which lets us do things like enumerate
     // its entries or clear all of them
     val prefs: SharedPreferences = getSharedPreferences()
@@ -104,10 +104,10 @@ open class SecureStoreModule : Module() {
     } else if (prefs.contains(key)) { // For backwards-compatibility try to read using the old key format
       return readJSONEncodedItem(key, prefs, options)
     }
-    return null
+    return SecureStoreFeedback(null)
   }
 
-  private suspend fun readJSONEncodedItem(key: String, prefs: SharedPreferences, options: SecureStoreOptions): String? {
+  private suspend fun readJSONEncodedItem(key: String, prefs: SharedPreferences, options: SecureStoreOptions): SecureStoreFeedback<out String?> {
     val keychainAwareKey = createKeychainAwareKey(key, options.keychainService)
 
     val legacyEncryptedItemString = prefs.getString(key, null)
@@ -126,7 +126,7 @@ open class SecureStoreModule : Module() {
       ""
     }
 
-    encryptedItemString ?: return null
+    encryptedItemString ?: return SecureStoreFeedback(null)
 
     val encryptedItem: JSONObject = try {
       JSONObject(encryptedItemString)
@@ -149,13 +149,13 @@ open class SecureStoreModule : Module() {
                 "This situation occurs when the app is reinstalled. The value will be removed to avoid future errors. Returning null"
             )
             deleteItemImpl(key, options)
-            return null
+            return SecureStoreFeedback(null)
           }
           return mAESEncryptor.decryptItem(key, encryptedItem, secretKeyEntry, options, authenticationHelper)
         }
         HybridAESEncryptor.NAME -> {
           val privateKeyEntry = getKeyEntryCompat(PrivateKeyEntry::class.java, hybridAESEncryptor, options, requireAuthentication, usesKeystoreSuffix)
-            ?: return null
+            ?: return SecureStoreFeedback(null)
           return hybridAESEncryptor.decryptItem(key, encryptedItem, privateKeyEntry, options, authenticationHelper)
         }
         else -> {
@@ -164,7 +164,7 @@ open class SecureStoreModule : Module() {
       }
     } catch (e: KeyPermanentlyInvalidatedException) {
       Log.w(TAG, "The requested key has been permanently invalidated. Returning null")
-      return null
+      return SecureStoreFeedback(null)
     } catch (e: BadPaddingException) {
       // The key from the KeyStore is unable to decode the entry. This is because a new key was generated, but the entries are encrypted using the old one.
       // This usually means that the user has reinstalled the app. We can safely remove the old value and return null as it's impossible to decrypt it.
@@ -174,7 +174,7 @@ open class SecureStoreModule : Module() {
           "The entry in shared preferences is out of sync with the keystore. It will be removed, returning null."
       )
       deleteItemImpl(key, options)
-      return null
+      return SecureStoreFeedback(null)
     } catch (e: GeneralSecurityException) {
       throw (DecryptException(e.message, key, options.keychainService, e))
     } catch (e: CodedException) {
@@ -184,7 +184,7 @@ open class SecureStoreModule : Module() {
     }
   }
 
-  private suspend fun setItemImpl(key: String, value: String?, options: SecureStoreOptions, keyIsInvalidated: Boolean) {
+  private suspend fun setItemImpl(key: String, value: String?, options: SecureStoreOptions, keyIsInvalidated: Boolean): SecureStoreAuthType {
     val keychainAwareKey = createKeychainAwareKey(key, options.keychainService)
     val prefs: SharedPreferences = getSharedPreferences()
 
@@ -193,7 +193,7 @@ open class SecureStoreModule : Module() {
       if (!success) {
         throw WriteException("Could not write a null value to SecureStore", key, options.keychainService)
       }
-      return
+      return SecureStoreAuthType.NONE
     }
 
     try {
@@ -210,7 +210,8 @@ open class SecureStoreModule : Module() {
        back a value.
        */
       val secretKeyEntry: SecretKeyEntry = getOrCreateKeyEntry(SecretKeyEntry::class.java, mAESEncryptor, options, options.requireAuthentication)
-      val encryptedItem = mAESEncryptor.createEncryptedItem(value, secretKeyEntry, options.requireAuthentication, options.authenticationPrompt, authenticationHelper, options.enableDeviceFallback)
+      val encryptResult = mAESEncryptor.createEncryptedItem(value, secretKeyEntry, options.requireAuthentication, options.authenticationPrompt, authenticationHelper, options.enableDeviceFallback)
+      val encryptedItem = encryptResult.value
       encryptedItem.put(SCHEME_PROPERTY, AESEncryptor.NAME)
       saveEncryptedItem(encryptedItem, prefs, keychainAwareKey, options.requireAuthentication, options.keychainService)
 
@@ -218,6 +219,9 @@ open class SecureStoreModule : Module() {
       if (prefs.contains(key)) {
         prefs.edit().remove(key).apply()
       }
+
+      return encryptResult.authType
+
     } catch (e: KeyPermanentlyInvalidatedException) {
       if (!keyIsInvalidated) {
         Log.w(TAG, "Key has been invalidated, retrying with the key deleted")

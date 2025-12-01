@@ -2,6 +2,54 @@ import ExpoSecureStore from './ExpoSecureStore';
 
 export type KeychainAccessibilityConstant = number;
 
+/**
+ * Authentication type returned by the SecureStore after reading item or saving it to the store.
+ */
+export const AUTH_TYPE = {
+  /**
+   * This is purely for backwards compatibility.
+   * Although it is not listed as a return value of the getAuthenticationType() method,
+   * it is still present in the Android code.
+   * @see https://developer.android.com/reference/android/hardware/biometrics/BiometricPrompt.AuthenticationResult#getAuthenticationType()
+   * @see https://developer.android.com/reference/androidx/biometric/BiometricPrompt#AUTHENTICATION_RESULT_TYPE_UNKNOWN()
+   * @platform android
+   */
+  UNKNOWN: -1,
+  /**
+   * Returned when the authentication fails
+   * @platform android
+   * @platform ios
+   */
+  NONE: 0,
+  /**
+   * Generic type, not specified whether it was a passcode or pattern.
+   * @platform android
+   * @platform ios
+   */
+  CREDENTIALS: 1,
+  /**
+   * Generic type, not specified whether it was a face scan or a fingerprint
+   * @platform android
+   */
+  BIOMETRICS: 2,
+  /**
+   * FaceID was used to authenticate
+   * @platform ios
+   */
+  FACE_ID: 3,
+  /**
+   * TouchID was used to authenticate
+   * @platform ios
+   */
+  TOUCH_ID: 4,
+  /**
+   * OpticID was used to authenticate (reserved by apple, used on Apple Vision Pro, not iOS)
+   */
+  OPTIC_ID: 5,
+} as const;
+
+type AuthType = (typeof AUTH_TYPE)[keyof typeof AUTH_TYPE];
+
 // @needsAudit
 /**
  * The data in the keychain item cannot be accessed after a restart until the device has been
@@ -161,7 +209,7 @@ export async function deleteItemAsync(
 export async function getItemAsync(
   key: string,
   options: SecureStoreOptions = {}
-): Promise<string | null> {
+): Promise<[string | null, AuthType]> {
   ensureValidKey(key);
   return await ExpoSecureStore.getValueWithKeyAsync(key, options);
 }
@@ -180,7 +228,7 @@ export async function setItemAsync(
   key: string,
   value: string,
   options: SecureStoreOptions = {}
-): Promise<void> {
+): Promise<AuthType> {
   ensureValidKey(key);
   if (!isValidValue(value)) {
     throw new Error(
@@ -188,7 +236,7 @@ export async function setItemAsync(
     );
   }
 
-  await ExpoSecureStore.setValueWithKeyAsync(value, key, options);
+  return await ExpoSecureStore.setValueWithKeyAsync(value, key, options);
 }
 
 /**
@@ -200,7 +248,7 @@ export async function setItemAsync(
  * @param options An [`SecureStoreOptions`](#securestoreoptions) object.
  *
  */
-export function setItem(key: string, value: string, options: SecureStoreOptions = {}): void {
+export function setItem(key: string, value: string, options: SecureStoreOptions = {}): AuthType {
   ensureValidKey(key);
   if (!isValidValue(value)) {
     throw new Error(
@@ -221,7 +269,7 @@ export function setItem(key: string, value: string, options: SecureStoreOptions 
  * @return Previously stored value. It resolves with `null` if there is no entry
  * for the given key or if the key has been invalidated.
  */
-export function getItem(key: string, options: SecureStoreOptions = {}): string | null {
+export function getItem(key: string, options: SecureStoreOptions = {}): [string | null, AuthType] {
   ensureValidKey(key);
   return ExpoSecureStore.getValueWithKeySync(key, options);
 }
