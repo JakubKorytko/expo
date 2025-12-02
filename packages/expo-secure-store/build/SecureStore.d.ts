@@ -138,7 +138,36 @@ export type SecureStoreOptions = {
      * @platform ios
      */
     enableDeviceFallback?: boolean;
+    /**
+     * When this flag is set to true, the get methods of SecureStore will return a two-element array. The first value will be the original value returned when this flag is set to false.
+     * The second value is the authentication type used to read the value from the AUTH_TYPE object.
+     * As for the set function, the returned value will simply be AUTH_TYPE.
+     *
+     * @warning
+     * If the iOS device supports biometrics and the user falls back to device credentials, it will not be detected.
+     * This is not the case on Android, but we cannot specify the exact type of biometrics (e.g. fingerprint or face scan).
+     * Whether the type is detected correctly depends on the platform and its native implementation.
+     * This should be treated as more of a hint.
+     *
+     * @default false
+     * @platform android
+     * @platform ios
+     */
     returnUsedAuthenticationType?: boolean;
+    /**
+     * On iOS, the system does not ask for auth when saving the value to the SecureStore.
+     * The Android however, displays the authentication prompt when saving the value.
+     * To keep the behavior on every platform similar as much as possible,
+     * setting this flag to true will ensure that authentication is required when saving a value to the store.
+     *
+     * @warning: This flag only works for the asynchronous version of the SecureStore save method.
+     * It should only be considered an improvement to the user experience; it does not prevent the user
+     * from saving the value without authenticating using other methods (e.g. by directly modifying the keychain).
+     * For it to take effect, the 'requireAuthentication' flag must be set to true.
+     * @default false
+     * @platform ios
+     */
+    forceAuthenticationOnSave?: boolean;
 };
 /**
  * Returns whether the SecureStore API is enabled on the current device. This does not check the app

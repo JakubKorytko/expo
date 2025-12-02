@@ -18,13 +18,13 @@ public final class SecureStoreModule: Module {
 
     AsyncFunction("getValueWithKeyAsync") { (key: String, options: SecureStoreOptions) in
       let result = try get(with: key, options: options)
-      
+
       return wrapResultWithFeedback(action: .get, result: result, options: options).value
     }
 
     Function("getValueWithKeySync") { (key: String, options: SecureStoreOptions) in
       let result = try get(with: key, options: options)
-      
+
       return wrapResultWithFeedback(action: .get, result: result, options: options).value
     }
 
@@ -33,8 +33,12 @@ public final class SecureStoreModule: Module {
         throw InvalidKeyException()
       }
 
+     if options.requireAuthentication && options.forceAuthenticationOnSave {
+        try await triggerPolicy(options: options)
+      }
+
       let result = try set(value: value, with: key, options: options)
-      
+
       return wrapResultWithFeedback(action: .set, result: result, options: options).value
     }
 
@@ -44,7 +48,7 @@ public final class SecureStoreModule: Module {
       }
 
       let result = try set(value: value, with: key, options: options)
-      
+
       return wrapResultWithFeedback(action: .set, result: result, options: options).value
     }
 
@@ -86,18 +90,18 @@ public final class SecureStoreModule: Module {
 
   private func wrapResultWithFeedback<T>(action: SecureStoreFeedbackAction, result: T, options: SecureStoreOptions) -> any SecureStoreFeedback {
     let authType = getAuthType().rawValue
-    
+
     if (!options.returnUsedAuthenticationType) {
       return SecureStoreOriginalFeedback(source: result, authType: authType)
     }
-    
+
     if (action == .get) {
       return SecureStoreGetFeedback(source: result, authType: authType)
     }
-    
+
     return SecureStoreSetFeedback(source: result, authType: authType)
   }
-  
+
   private func areBiometricsEnabled() -> Bool {
     #if os(tvOS)
       return false
@@ -105,7 +109,7 @@ public final class SecureStoreModule: Module {
       return LAContext().canEvaluatePolicy(LAPolicy.deviceOwnerAuthenticationWithBiometrics, error: nil)
     #endif
   }
-  
+
   private func get(with key: String, options: SecureStoreOptions) throws -> String? {
     guard let key = validate(for: key) else {
       throw InvalidKeyException()
@@ -185,6 +189,32 @@ public final class SecureStoreModule: Module {
       return true
     } else {
       throw KeyChainException(status)
+    }
+  }
+
+  @MainActor
+  private func triggerPolicy(options: SecureStoreOptions) async throws {
+    let isPolicyAvailable = options.enableDeviceFallback ? areDeviceCredentialsEnabled() : areBiometricsEnabled()
+
+    guard isPolicyAvailable else {
+      throw SecureStoreRuntimeError("No authentication method available")
+    }
+
+    let localAuthPolicy: LAPolicy = options.enableDeviceFallback ? .deviceOwnerAuthentication : .deviceOwnerAuthenticationWithBiometrics
+    let localizedReason: String = options.authenticationPrompt ?? "Authentication required"
+
+    let success: Bool = try await withCheckedThrowingContinuation { continuation in
+      LAContext().evaluatePolicy(localAuthPolicy, localizedReason: localizedReason) { success, error in
+        if let error = error {
+          continuation.resume(throwing: error)
+        } else {
+          continuation.resume(returning: success)
+        }
+      }
+    }
+
+    guard success else {
+      throw SecureStoreRuntimeError("Unable to authenticate")
     }
   }
 

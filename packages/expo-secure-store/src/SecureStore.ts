@@ -185,6 +185,21 @@ export type SecureStoreOptions = {
    * @platform ios
    */
   returnUsedAuthenticationType?: boolean;
+
+  /**
+   * On iOS, the system does not ask for auth when saving the value to the SecureStore.
+   * The Android however, displays the authentication prompt when saving the value.
+   * To keep the behavior on every platform similar as much as possible,
+   * setting this flag to true will ensure that authentication is required when saving a value to the store.
+   *
+   * @warning: This flag only works for the asynchronous version of the SecureStore save method.
+   * It should only be considered an improvement to the user experience; it does not prevent the user
+   * from saving the value without authenticating using other methods (e.g. by directly modifying the keychain).
+   * For it to take effect, the 'requireAuthentication' flag must be set to true.
+   * @default false
+   * @platform ios
+   */
+  forceAuthenticationOnSave?: boolean;
 };
 
 // @needsAudit
