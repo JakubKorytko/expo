@@ -102,6 +102,19 @@ export type SecureStoreOptions = {
    * @platform ios
    */
   accessGroup?: string;
+
+  /**
+   * The LocalAuthentication behaves slightly differently on iOS simulators.
+   * In numerous cases, the authentication prompts are skipped on simulators (as opposed to real devices).
+   * Setting this flag to true forces the prompt to appear on simulators when a value with the `requireAuthentication` flag set to true is read.
+   * This is purely for testing the app on simulators, in cases where the prompt does not appear when the value is read.
+   * This has no effect on real devices.
+   *
+   * @warning: This flag only works for the asynchronous version of the SecureStore read method.
+   * @default false
+   * @platform ios
+   */
+  forceReadAuthenticationOnSimulators?: boolean;
 };
 
 // @needsAudit
