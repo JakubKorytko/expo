@@ -1,4 +1,53 @@
+type EmptyObject = Record<string, never>;
+type SecureStoreSetFeedback<R extends SecureStoreOptions> = R['returnUsedAuthenticationType'] extends true ? AuthType : void;
+type SecureStoreGetFeedback<T, R extends SecureStoreOptions> = R['returnUsedAuthenticationType'] extends true ? [T | null, AuthType] : T | null;
 export type KeychainAccessibilityConstant = number;
+/**
+ * Authentication type returned by the SecureStore after reading item or saving it to the store.
+ */
+export declare const AUTH_TYPE: {
+    /**
+     * This is purely for backwards compatibility.
+     * Although it is not listed as a return value of the getAuthenticationType() method,
+     * it is still present in the Android code.
+     * @see https://developer.android.com/reference/android/hardware/biometrics/BiometricPrompt.AuthenticationResult#getAuthenticationType()
+     * @see https://developer.android.com/reference/androidx/biometric/BiometricPrompt#AUTHENTICATION_RESULT_TYPE_UNKNOWN()
+     * @platform android
+     */
+    readonly UNKNOWN: -1;
+    /**
+     * Returned when the authentication fails
+     * @platform android
+     * @platform ios
+     */
+    readonly NONE: 0;
+    /**
+     * Generic type, not specified whether it was a passcode or pattern.
+     * @platform android
+     * @platform ios
+     */
+    readonly CREDENTIALS: 1;
+    /**
+     * Generic type, not specified whether it was a face scan or a fingerprint
+     * @platform android
+     */
+    readonly BIOMETRICS: 2;
+    /**
+     * FaceID was used to authenticate
+     * @platform ios
+     */
+    readonly FACE_ID: 3;
+    /**
+     * TouchID was used to authenticate
+     * @platform ios
+     */
+    readonly TOUCH_ID: 4;
+    /**
+     * OpticID was used to authenticate (reserved by apple, used on Apple Vision Pro, not iOS)
+     */
+    readonly OPTIC_ID: 5;
+};
+type AuthType = (typeof AUTH_TYPE)[keyof typeof AUTH_TYPE];
 /**
  * The data in the keychain item cannot be accessed after a restart until the device has been
  * unlocked once by the user. This may be useful if you need to access the item when the phone
@@ -59,7 +108,6 @@ export type SecureStoreOptions = {
      * Warning: This option is not supported in Expo Go when biometric authentication is available due to a missing NSFaceIDUsageDescription.
      * In release builds or when using continuous native generation, make sure to use the `expo-secure-store` config plugin.
      *
-     * > **Note:** This library requires a real device for testing since emulators/simulators do not require biometric authentication when retrieving secrets, unlike real iOS devices.
      */
     requireAuthentication?: boolean;
     /**
@@ -79,6 +127,22 @@ export type SecureStoreOptions = {
      * @platform ios
      */
     accessGroup?: string;
+    /**
+     * When this flag is set to true, the get methods of SecureStore will return a two-element array. The first value will be the original value returned when this flag is set to false.
+     * The second value is the authentication type used to read the value from the AUTH_TYPE object.
+     * As for the set function, the returned value will simply be AUTH_TYPE.
+     *
+     * @warning
+     * If the iOS device supports biometrics and the user falls back to device credentials, it will not be detected.
+     * This is not the case on Android, but we cannot specify the exact type of biometrics (e.g. fingerprint or face scan).
+     * Whether the type is detected correctly depends on the platform and its native implementation.
+     * This should be treated as more of a hint.
+     *
+     @default false
+     @platform android
+     @platform ios
+     */
+    returnUsedAuthenticationType?: boolean;
 };
 /**
  * Returns whether the SecureStore API is enabled on the current device. This does not check the app
@@ -110,7 +174,7 @@ export declare function deleteItemAsync(key: string, options?: SecureStoreOption
  * > After a key has been invalidated, it becomes impossible to read its value.
  * > This only applies to values stored with `requireAuthentication` set to `true`.
  */
-export declare function getItemAsync(key: string, options?: SecureStoreOptions): Promise<string | null>;
+export declare function getItemAsync<R extends SecureStoreOptions>(key: string, options?: R | EmptyObject): Promise<SecureStoreGetFeedback<string, R>>;
 /**
  * Stores a key–value pair.
  *
@@ -120,7 +184,7 @@ export declare function getItemAsync(key: string, options?: SecureStoreOptions):
  *
  * @return A promise that rejects if value cannot be stored on the device.
  */
-export declare function setItemAsync(key: string, value: string, options?: SecureStoreOptions): Promise<void>;
+export declare function setItemAsync<R extends SecureStoreOptions>(key: string, value: string, options?: R | EmptyObject): Promise<SecureStoreSetFeedback<R>>;
 /**
  * Stores a key–value pair synchronously.
  * > **Note:** This function blocks the JavaScript thread, so the application may not be interactive when the `requireAuthentication` option is set to `true` until the user authenticates.
@@ -130,7 +194,7 @@ export declare function setItemAsync(key: string, value: string, options?: Secur
  * @param options An [`SecureStoreOptions`](#securestoreoptions) object.
  *
  */
-export declare function setItem(key: string, value: string, options?: SecureStoreOptions): void;
+export declare function setItem<R extends SecureStoreOptions>(key: string, value: string, options?: R | EmptyObject): SecureStoreSetFeedback<R>;
 /**
  * Synchronously reads the stored value associated with the provided key.
  * > **Note:** This function blocks the JavaScript thread, so the application may not be interactive when reading a value with `requireAuthentication`
@@ -141,7 +205,7 @@ export declare function setItem(key: string, value: string, options?: SecureStor
  * @return Previously stored value. It resolves with `null` if there is no entry
  * for the given key or if the key has been invalidated.
  */
-export declare function getItem(key: string, options?: SecureStoreOptions): string | null;
+export declare function getItem<R extends SecureStoreOptions>(key: string, options?: R | EmptyObject): SecureStoreGetFeedback<string, R>;
 /**
  * Checks if the value can be saved with `requireAuthentication` option enabled.
  * @return `true` if the device supports biometric authentication and the enrolled method is sufficiently secure. Otherwise, returns `false`. Always returns false on tvOS.
@@ -149,4 +213,5 @@ export declare function getItem(key: string, options?: SecureStoreOptions): stri
  * @platform ios
  */
 export declare function canUseBiometricAuthentication(): boolean;
+export {};
 //# sourceMappingURL=SecureStore.d.ts.map

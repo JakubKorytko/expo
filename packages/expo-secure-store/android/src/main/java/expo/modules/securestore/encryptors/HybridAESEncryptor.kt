@@ -9,6 +9,7 @@ import expo.modules.securestore.EncryptException
 import expo.modules.securestore.KeyStoreException
 import expo.modules.securestore.SecureStoreModule
 import expo.modules.securestore.SecureStoreOptions
+import expo.modules.securestore.SecureStoreOriginalFeedback
 import org.json.JSONException
 import org.json.JSONObject
 import java.security.GeneralSecurityException
@@ -70,7 +71,7 @@ class HybridAESEncryptor(private var mContext: Context, private val mAESEncrypto
     requireAuthentication: Boolean,
     authenticationPrompt: String,
     authenticationHelper: AuthenticationHelper
-  ): JSONObject {
+  ): SecureStoreOriginalFeedback<JSONObject> {
     // This should never be called after we dropped Android SDK 22 support.
     throw EncryptException(
       "HybridAESEncryption should not be used on Android SDK >= 23. This shouldn't happen. " +
@@ -87,7 +88,7 @@ class HybridAESEncryptor(private var mContext: Context, private val mAESEncrypto
     keyStoreEntry: KeyStore.PrivateKeyEntry,
     options: SecureStoreOptions,
     authenticationHelper: AuthenticationHelper
-  ): String {
+  ): SecureStoreOriginalFeedback<String> {
     // Decrypt the encrypted symmetric key
     val encryptedSecretKeyString = encryptedItem.getString(ENCRYPTED_SECRET_KEY_PROPERTY)
     val encryptedSecretKeyBytes = Base64.decode(encryptedSecretKeyString, Base64.DEFAULT)

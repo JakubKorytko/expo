@@ -2,6 +2,7 @@ package expo.modules.securestore.encryptors
 
 import expo.modules.securestore.AuthenticationHelper
 import expo.modules.securestore.SecureStoreOptions
+import expo.modules.securestore.SecureStoreOriginalFeedback
 import org.json.JSONException
 import org.json.JSONObject
 import java.security.GeneralSecurityException
@@ -26,7 +27,7 @@ interface KeyBasedEncryptor<E : KeyStore.Entry> {
     requireAuthentication: Boolean,
     authenticationPrompt: String,
     authenticationHelper: AuthenticationHelper
-  ): JSONObject
+  ): SecureStoreOriginalFeedback<JSONObject>
 
   @Throws(GeneralSecurityException::class, JSONException::class)
   suspend fun decryptItem(
@@ -35,5 +36,5 @@ interface KeyBasedEncryptor<E : KeyStore.Entry> {
     keyStoreEntry: E,
     options: SecureStoreOptions,
     authenticationHelper: AuthenticationHelper
-  ): String
+  ): SecureStoreOriginalFeedback<String>
 }

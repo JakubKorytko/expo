@@ -1,4 +1,49 @@
 import ExpoSecureStore from './ExpoSecureStore';
+/**
+ * Authentication type returned by the SecureStore after reading item or saving it to the store.
+ */
+export const AUTH_TYPE = {
+    /**
+     * This is purely for backwards compatibility.
+     * Although it is not listed as a return value of the getAuthenticationType() method,
+     * it is still present in the Android code.
+     * @see https://developer.android.com/reference/android/hardware/biometrics/BiometricPrompt.AuthenticationResult#getAuthenticationType()
+     * @see https://developer.android.com/reference/androidx/biometric/BiometricPrompt#AUTHENTICATION_RESULT_TYPE_UNKNOWN()
+     * @platform android
+     */
+    UNKNOWN: -1,
+    /**
+     * Returned when the authentication fails
+     * @platform android
+     * @platform ios
+     */
+    NONE: 0,
+    /**
+     * Generic type, not specified whether it was a passcode or pattern.
+     * @platform android
+     * @platform ios
+     */
+    CREDENTIALS: 1,
+    /**
+     * Generic type, not specified whether it was a face scan or a fingerprint
+     * @platform android
+     */
+    BIOMETRICS: 2,
+    /**
+     * FaceID was used to authenticate
+     * @platform ios
+     */
+    FACE_ID: 3,
+    /**
+     * TouchID was used to authenticate
+     * @platform ios
+     */
+    TOUCH_ID: 4,
+    /**
+     * OpticID was used to authenticate (reserved by apple, used on Apple Vision Pro, not iOS)
+     */
+    OPTIC_ID: 5,
+};
 // @needsAudit
 /**
  * The data in the keychain item cannot be accessed after a restart until the device has been
@@ -101,7 +146,7 @@ export async function setItemAsync(key, value, options = {}) {
     if (!isValidValue(value)) {
         throw new Error(`Invalid value provided to SecureStore. Values must be strings; consider JSON-encoding your values if they are serializable.`);
     }
-    await ExpoSecureStore.setValueWithKeyAsync(value, key, options);
+    return await ExpoSecureStore.setValueWithKeyAsync(value, key, options);
 }
 /**
  * Stores a key–value pair synchronously.

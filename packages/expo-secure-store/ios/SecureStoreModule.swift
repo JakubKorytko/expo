@@ -16,28 +16,36 @@ public final class SecureStoreModule: Module {
     Constant("WHEN_UNLOCKED") { SecureStoreAccessible.whenUnlocked.rawValue }
     Constant("WHEN_UNLOCKED_THIS_DEVICE_ONLY") { SecureStoreAccessible.whenUnlockedThisDeviceOnly.rawValue }
 
-    AsyncFunction("getValueWithKeyAsync") { (key: String, options: SecureStoreOptions) -> String? in
-      return try get(with: key, options: options)
+    AsyncFunction("getValueWithKeyAsync") { (key: String, options: SecureStoreOptions) in
+      let result = try get(with: key, options: options)
+      
+      return wrapResultWithFeedback(action: .get, result: result, options: options).value
     }
 
-    Function("getValueWithKeySync") { (key: String, options: SecureStoreOptions) -> String? in
-      return try get(with: key, options: options)
+    Function("getValueWithKeySync") { (key: String, options: SecureStoreOptions) in
+      let result = try get(with: key, options: options)
+      
+      return wrapResultWithFeedback(action: .get, result: result, options: options).value
     }
 
-    AsyncFunction("setValueWithKeyAsync") { (value: String, key: String, options: SecureStoreOptions) -> Bool in
+    AsyncFunction("setValueWithKeyAsync") { (value: String, key: String, options: SecureStoreOptions) in
       guard let key = validate(for: key) else {
         throw InvalidKeyException()
       }
 
-      return try set(value: value, with: key, options: options)
+      let result = try set(value: value, with: key, options: options)
+      
+      return wrapResultWithFeedback(action: .set, result: result, options: options).value
     }
 
-    Function("setValueWithKeySync") {(value: String, key: String, options: SecureStoreOptions) -> Bool in
+    Function("setValueWithKeySync") {(value: String, key: String, options: SecureStoreOptions) in
       guard let key = validate(for: key) else {
         throw InvalidKeyException()
       }
 
-      return try set(value: value, with: key, options: options)
+      let result = try set(value: value, with: key, options: options)
+      
+      return wrapResultWithFeedback(action: .set, result: result, options: options).value
     }
 
     AsyncFunction("deleteValueWithKeyAsync") { (key: String, options: SecureStoreOptions) in
@@ -51,21 +59,45 @@ public final class SecureStoreModule: Module {
     }
 
     Function("canUseBiometricAuthentication") {() -> Bool in
-      #if os(tvOS)
-      return false
-      #else
-      let context = LAContext()
-      var error: NSError?
-      let isBiometricsSupported: Bool = context.canEvaluatePolicy(LAPolicy.deviceOwnerAuthenticationWithBiometrics, error: &error)
-
-      if error != nil {
-        return false
-      }
-      return isBiometricsSupported
-      #endif
+      return areBiometricsEnabled()
     }
   }
 
+  private func getAuthType() -> AuthType {
+    if !areBiometricsEnabled() {return AuthType.credentials}
+    let biometryType = LAContext().biometryType
+
+    switch biometryType {
+      case .faceID: return .faceID
+      case .touchID: return .touchID
+      case .opticID: return .opticID // available since iOS 17
+      case .none: fallthrough // this one continues to the next line
+      @unknown default: return .credentials
+    }
+  }
+
+  private func wrapResultWithFeedback<T>(action: SecureStoreFeedbackAction, result: T, options: SecureStoreOptions) -> any SecureStoreFeedback {
+    let authType = getAuthType().rawValue
+    
+    if (!options.returnUsedAuthenticationType) {
+      return SecureStoreOriginalFeedback(source: result, authType: authType)
+    }
+    
+    if (action == .get) {
+      return SecureStoreGetFeedback(source: result, authType: authType)
+    }
+    
+    return SecureStoreSetFeedback(source: result, authType: authType)
+  }
+  
+  private func areBiometricsEnabled() -> Bool {
+    #if os(tvOS)
+      return false
+    #else
+      return LAContext().canEvaluatePolicy(LAPolicy.deviceOwnerAuthenticationWithBiometrics, error: nil)
+    #endif
+  }
+  
   private func get(with key: String, options: SecureStoreOptions) throws -> String? {
     guard let key = validate(for: key) else {
       throw InvalidKeyException()
