@@ -10,6 +10,7 @@ class SecureStoreOptions(
   @Field var authenticationPrompt: String = " ",
   @Field var keychainService: String = SecureStoreModule.DEFAULT_KEYSTORE_ALIAS,
   @Field var requireAuthentication: Boolean = false,
+  @Field var enableDeviceFallback: Boolean = false,
   @Field var returnUsedAuthenticationType: Boolean = false
 ) : Record, Serializable
 

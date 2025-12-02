@@ -75,6 +75,15 @@ open class SecureStoreModule : Module() {
       }
     }
 
+    Function("canUseDeviceCredentialsAuthentication") {
+      return@Function try {
+        authenticationHelper.assertDeviceSecurity()
+        true
+      } catch (e: AuthenticationException) {
+        false
+      }
+    }
+
     OnCreate {
       authenticationHelper = AuthenticationHelper(reactContext, appContext.legacyModuleRegistry)
       hybridAESEncryptor = HybridAESEncryptor(reactContext, mAESEncryptor)
@@ -217,7 +226,7 @@ open class SecureStoreModule : Module() {
        back a value.
        */
       val secretKeyEntry: SecretKeyEntry = getOrCreateKeyEntry(SecretKeyEntry::class.java, mAESEncryptor, options, options.requireAuthentication)
-      val encryptResult = mAESEncryptor.createEncryptedItem(value, secretKeyEntry, options.requireAuthentication, options.authenticationPrompt, authenticationHelper)
+      val encryptResult = mAESEncryptor.createEncryptedItem(value, secretKeyEntry, options.requireAuthentication, options.authenticationPrompt, authenticationHelper, options.enableDeviceFallback)
       val encryptedItem = encryptResult.value
       encryptedItem.put(SCHEME_PROPERTY, AESEncryptor.NAME)
       saveEncryptedItem(encryptedItem, prefs, keychainAwareKey, options.requireAuthentication, options.keychainService)
@@ -363,7 +372,11 @@ open class SecureStoreModule : Module() {
     return getKeyEntry(keyStoreEntryClass, encryptor, options, requireAuthentication) ?: run {
       // Android won't allow us to generate the keys if the device doesn't support biometrics or no biometrics are enrolled
       if (requireAuthentication) {
-        authenticationHelper.assertBiometricsSupport()
+        if (options.enableDeviceFallback) {
+          authenticationHelper.assertDeviceSecurity()
+        } else {
+          authenticationHelper.assertBiometricsSupport()
+        }
       }
       encryptor.initializeKeyStoreEntry(keyStore, options)
     }

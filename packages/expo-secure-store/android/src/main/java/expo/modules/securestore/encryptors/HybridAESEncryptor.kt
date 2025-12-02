@@ -70,7 +70,8 @@ class HybridAESEncryptor(private var mContext: Context, private val mAESEncrypto
     keyStoreEntry: KeyStore.PrivateKeyEntry,
     requireAuthentication: Boolean,
     authenticationPrompt: String,
-    authenticationHelper: AuthenticationHelper
+    authenticationHelper: AuthenticationHelper,
+    enableDeviceFallback: Boolean,
   ): SecureStoreOriginalFeedback<JSONObject> {
     // This should never be called after we dropped Android SDK 22 support.
     throw EncryptException(

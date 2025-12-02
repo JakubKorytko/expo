@@ -1,9 +1,10 @@
 package expo.modules.securestore.encryptors
 
-import android.annotation.TargetApi
+import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import androidx.annotation.RequiresApi
 import androidx.biometric.BiometricPrompt
 import expo.modules.securestore.AuthenticationHelper
 import expo.modules.securestore.DecryptException
@@ -52,17 +53,22 @@ class AESEncryptor : KeyBasedEncryptor<KeyStore.SecretKeyEntry> {
     return "${getKeyStoreAlias(options)}:$suffix"
   }
 
-  @TargetApi(23)
+  @RequiresApi(Build.VERSION_CODES.R)
   @Throws(GeneralSecurityException::class)
   override fun initializeKeyStoreEntry(keyStore: KeyStore, options: SecureStoreOptions): KeyStore.SecretKeyEntry {
     val extendedKeystoreAlias = getExtendedKeyStoreAlias(options, options.requireAuthentication)
     val keyPurposes = KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+
+    val authType =
+      if (options.enableDeviceFallback) KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
+      else KeyProperties.AUTH_BIOMETRIC_STRONG
 
     val algorithmSpec: AlgorithmParameterSpec = KeyGenParameterSpec.Builder(extendedKeystoreAlias, keyPurposes)
       .setKeySize(AES_KEY_SIZE_BITS)
       .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
       .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
       .setUserAuthenticationRequired(options.requireAuthentication)
+      .setUserAuthenticationParameters(0, authType)
       .build()
 
     val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, keyStore.provider)
@@ -80,7 +86,8 @@ class AESEncryptor : KeyBasedEncryptor<KeyStore.SecretKeyEntry> {
     keyStoreEntry: KeyStore.SecretKeyEntry,
     requireAuthentication: Boolean,
     authenticationPrompt: String,
-    authenticationHelper: AuthenticationHelper
+    authenticationHelper: AuthenticationHelper,
+    enableDeviceFallback: Boolean,
   ): SecureStoreOriginalFeedback<JSONObject> {
     val secretKey = keyStoreEntry.secretKey
     val cipher = Cipher.getInstance(AES_CIPHER)
@@ -91,7 +98,7 @@ class AESEncryptor : KeyBasedEncryptor<KeyStore.SecretKeyEntry> {
     val authenticatedCipher: Cipher
 
     if (requireAuthentication) {
-      promptResult = authenticationHelper.authenticateCipher(cipher, authenticationPrompt)
+      promptResult = authenticationHelper.authenticateCipher(cipher, authenticationPrompt, enableDeviceFallback)
       authenticatedCipher = promptResult.cryptoObject?.cipher ?: cipher
     } else {
       authenticatedCipher = cipher
@@ -142,7 +149,7 @@ class AESEncryptor : KeyBasedEncryptor<KeyStore.SecretKeyEntry> {
     val unlockedCipher: Cipher
 
     if (requiresAuthentication) {
-      promptResult = authenticationHelper.authenticateCipher(cipher, options.authenticationPrompt)
+      promptResult = authenticationHelper.authenticateCipher(cipher, options.authenticationPrompt, options.enableDeviceFallback)
       unlockedCipher = promptResult.cryptoObject?.cipher ?: cipher
     } else {
       unlockedCipher = cipher

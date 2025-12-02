@@ -108,6 +108,7 @@ export type SecureStoreOptions = {
      * Warning: This option is not supported in Expo Go when biometric authentication is available due to a missing NSFaceIDUsageDescription.
      * In release builds or when using continuous native generation, make sure to use the `expo-secure-store` config plugin.
      *
+     * > **Note:** This library requires a real device for testing since emulators/simulators do not require biometric authentication when retrieving secrets, unlike real iOS devices.
      */
     requireAuthentication?: boolean;
     /**
@@ -128,20 +129,15 @@ export type SecureStoreOptions = {
      */
     accessGroup?: string;
     /**
-     * When this flag is set to true, the get methods of SecureStore will return a two-element array. The first value will be the original value returned when this flag is set to false.
-     * The second value is the authentication type used to read the value from the AUTH_TYPE object.
-     * As for the set function, the returned value will simply be AUTH_TYPE.
+     * This flag enables users to authenticate using Lock Screen Knowledge Factor (e.g. PIN, pattern or password).
+     * For sensitive apps, it is recommended not having biometric fall back to such factor.
+     * @see: https://developer.android.com/security/fraud-prevention/authentication
      *
-     * @warning
-     * If the iOS device supports biometrics and the user falls back to device credentials, it will not be detected.
-     * This is not the case on Android, but we cannot specify the exact type of biometrics (e.g. fingerprint or face scan).
-     * Whether the type is detected correctly depends on the platform and its native implementation.
-     * This should be treated as more of a hint.
-     *
-     @default false
-     @platform android
-     @platform ios
+     * @default false
+     * @platform android
+     * @platform ios
      */
+    enableDeviceFallback?: boolean;
     returnUsedAuthenticationType?: boolean;
 };
 /**
@@ -213,5 +209,12 @@ export declare function getItem<R extends SecureStoreOptions>(key: string, optio
  * @platform ios
  */
 export declare function canUseBiometricAuthentication(): boolean;
+/**
+ * Checks whether any device credentials are configured on the device.
+ * @return `true` if the device has device credentials configured. Otherwise, returns `false`.
+ * @platform android
+ * @platform ios
+ */
+export declare function canUseDeviceCredentialsAuthentication(): boolean;
 export {};
 //# sourceMappingURL=SecureStore.d.ts.map
