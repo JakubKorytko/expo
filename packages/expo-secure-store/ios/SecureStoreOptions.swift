@@ -27,6 +27,9 @@ internal struct SecureStoreOptions: Record {
 
   @Field
   var failOnUpdate: Bool = false
+
+  @Field
+  var forceReadAuthenticationOnSimulators: Bool = false
 }
 
 @available(iOS 11.2, *)

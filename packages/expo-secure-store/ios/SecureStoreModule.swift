@@ -17,6 +17,11 @@ public final class SecureStoreModule: Module {
     Constant("WHEN_UNLOCKED_THIS_DEVICE_ONLY") { SecureStoreAccessible.whenUnlockedThisDeviceOnly.rawValue }
 
     AsyncFunction("getValueWithKeyAsync") { (key: String, options: SecureStoreOptions) in
+      #if targetEnvironment(simulator)
+        if options.requireAuthentication && options.forceReadAuthenticationOnSimulators {
+          try await triggerPolicy(options: options)
+        }
+      #endif
       let result = try get(with: key, options: options)
 
       return wrapResultWithFeedback(action: .get, result: result, options: options).value
