@@ -168,6 +168,16 @@ export type SecureStoreOptions = {
      * @platform ios
      */
     forceAuthenticationOnSave?: boolean;
+    /**
+     * If the key has already been stored, the save function will throw an error instead of overwriting it.
+     * The behaviour differs slightly depending on the platform.
+     * On Android, an error is thrown before the authentication prompt. On iOS, an error is thrown after authentication.
+     *
+     * @default false
+     * @platform ios
+     * @platform android
+     */
+    failOnUpdate?: boolean;
 };
 /**
  * Returns whether the SecureStore API is enabled on the current device. This does not check the app
