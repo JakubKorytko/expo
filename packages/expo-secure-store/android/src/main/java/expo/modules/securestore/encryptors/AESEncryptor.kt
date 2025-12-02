@@ -4,10 +4,12 @@ import android.annotation.TargetApi
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import androidx.biometric.BiometricPrompt
 import expo.modules.securestore.AuthenticationHelper
 import expo.modules.securestore.DecryptException
 import expo.modules.securestore.SecureStoreModule
 import expo.modules.securestore.SecureStoreOptions
+import expo.modules.securestore.SecureStoreOriginalFeedback
 import org.json.JSONException
 import org.json.JSONObject
 import java.nio.charset.StandardCharsets
@@ -79,15 +81,23 @@ class AESEncryptor : KeyBasedEncryptor<KeyStore.SecretKeyEntry> {
     requireAuthentication: Boolean,
     authenticationPrompt: String,
     authenticationHelper: AuthenticationHelper
-  ): JSONObject {
+  ): SecureStoreOriginalFeedback<JSONObject> {
     val secretKey = keyStoreEntry.secretKey
     val cipher = Cipher.getInstance(AES_CIPHER)
     cipher.init(Cipher.ENCRYPT_MODE, secretKey)
 
     val gcmSpec = cipher.parameters.getParameterSpec(GCMParameterSpec::class.java)
-    val authenticatedCipher = authenticationHelper.authenticateCipher(cipher, requireAuthentication, authenticationPrompt)
+    var promptResult: BiometricPrompt.AuthenticationResult? = null
+    val authenticatedCipher: Cipher
 
-    return createEncryptedItemWithCipher(plaintextValue, authenticatedCipher, gcmSpec)
+    if (requireAuthentication) {
+      promptResult = authenticationHelper.authenticateCipher(cipher, authenticationPrompt)
+      authenticatedCipher = promptResult.cryptoObject?.cipher ?: cipher
+    } else {
+      authenticatedCipher = cipher
+    }
+
+    return SecureStoreOriginalFeedback(createEncryptedItemWithCipher(plaintextValue, authenticatedCipher, gcmSpec), promptResult)
   }
 
   internal fun createEncryptedItemWithCipher(
@@ -114,7 +124,7 @@ class AESEncryptor : KeyBasedEncryptor<KeyStore.SecretKeyEntry> {
     keyStoreEntry: KeyStore.SecretKeyEntry,
     options: SecureStoreOptions,
     authenticationHelper: AuthenticationHelper
-  ): String {
+  ): SecureStoreOriginalFeedback<String> {
     val ciphertext = encryptedItem.getString(CIPHERTEXT_PROPERTY)
     val ivString = encryptedItem.getString(IV_PROPERTY)
     val authenticationTagLength = encryptedItem.getInt(GCM_AUTHENTICATION_TAG_LENGTH_PROPERTY)
@@ -128,8 +138,17 @@ class AESEncryptor : KeyBasedEncryptor<KeyStore.SecretKeyEntry> {
       throw DecryptException("Authentication tag length must be at least $MIN_GCM_AUTHENTICATION_TAG_LENGTH bits long", key, options.keychainService)
     }
     cipher.init(Cipher.DECRYPT_MODE, keyStoreEntry.secretKey, gcmSpec)
-    val unlockedCipher = authenticationHelper.authenticateCipher(cipher, requiresAuthentication, options.authenticationPrompt)
-    return String(unlockedCipher.doFinal(ciphertextBytes), StandardCharsets.UTF_8)
+    var promptResult: BiometricPrompt.AuthenticationResult? = null
+    val unlockedCipher: Cipher
+
+    if (requiresAuthentication) {
+      promptResult = authenticationHelper.authenticateCipher(cipher, options.authenticationPrompt)
+      unlockedCipher = promptResult.cryptoObject?.cipher ?: cipher
+    } else {
+      unlockedCipher = cipher
+    }
+
+    return SecureStoreOriginalFeedback(String(unlockedCipher.doFinal(ciphertextBytes), StandardCharsets.UTF_8), promptResult)
   }
 
   companion object {

@@ -1,6 +1,61 @@
 import ExpoSecureStore from './ExpoSecureStore';
 
+type EmptyObject = Record<string, never>;
+type SecureStoreSetFeedback<R extends SecureStoreOptions> =
+  R['returnUsedAuthenticationType'] extends true ? AuthType : void;
+type SecureStoreGetFeedback<
+  T,
+  R extends SecureStoreOptions,
+> = R['returnUsedAuthenticationType'] extends true ? [T | null, AuthType] : T | null;
 export type KeychainAccessibilityConstant = number;
+
+/**
+ * Authentication type returned by the SecureStore after reading item or saving it to the store.
+ */
+export const AUTH_TYPE = {
+  /**
+   * This is purely for backwards compatibility.
+   * Although it is not listed as a return value of the getAuthenticationType() method,
+   * it is still present in the Android code.
+   * @see https://developer.android.com/reference/android/hardware/biometrics/BiometricPrompt.AuthenticationResult#getAuthenticationType()
+   * @see https://developer.android.com/reference/androidx/biometric/BiometricPrompt#AUTHENTICATION_RESULT_TYPE_UNKNOWN()
+   * @platform android
+   */
+  UNKNOWN: -1,
+  /**
+   * Returned when the authentication fails
+   * @platform android
+   * @platform ios
+   */
+  NONE: 0,
+  /**
+   * Generic type, not specified whether it was a passcode or pattern.
+   * @platform android
+   * @platform ios
+   */
+  CREDENTIALS: 1,
+  /**
+   * Generic type, not specified whether it was a face scan or a fingerprint
+   * @platform android
+   */
+  BIOMETRICS: 2,
+  /**
+   * FaceID was used to authenticate
+   * @platform ios
+   */
+  FACE_ID: 3,
+  /**
+   * TouchID was used to authenticate
+   * @platform ios
+   */
+  TOUCH_ID: 4,
+  /**
+   * OpticID was used to authenticate (reserved by apple, used on Apple Vision Pro, not iOS)
+   */
+  OPTIC_ID: 5,
+} as const;
+
+type AuthType = (typeof AUTH_TYPE)[keyof typeof AUTH_TYPE];
 
 // @needsAudit
 /**
@@ -81,7 +136,6 @@ export type SecureStoreOptions = {
    * Warning: This option is not supported in Expo Go when biometric authentication is available due to a missing NSFaceIDUsageDescription.
    * In release builds or when using continuous native generation, make sure to use the `expo-secure-store` config plugin.
    *
-   * > **Note:** This library requires a real device for testing since emulators/simulators do not require biometric authentication when retrieving secrets, unlike real iOS devices.
    */
   requireAuthentication?: boolean;
   /**
@@ -102,6 +156,23 @@ export type SecureStoreOptions = {
    * @platform ios
    */
   accessGroup?: string;
+
+  /**
+   * When this flag is set to true, the get methods of SecureStore will return a two-element array. The first value will be the original value returned when this flag is set to false.
+   * The second value is the authentication type used to read the value from the AUTH_TYPE object.
+   * As for the set function, the returned value will simply be AUTH_TYPE.
+   *
+   * @warning
+   * If the iOS device supports biometrics and the user falls back to device credentials, it will not be detected.
+   * This is not the case on Android, but we cannot specify the exact type of biometrics (e.g. fingerprint or face scan).
+   * Whether the type is detected correctly depends on the platform and its native implementation.
+   * This should be treated as more of a hint.
+   *
+   @default false
+   @platform android
+   @platform ios
+   */
+  returnUsedAuthenticationType?: boolean;
 };
 
 // @needsAudit
@@ -148,10 +219,10 @@ export async function deleteItemAsync(
  * > After a key has been invalidated, it becomes impossible to read its value.
  * > This only applies to values stored with `requireAuthentication` set to `true`.
  */
-export async function getItemAsync(
+export async function getItemAsync<R extends SecureStoreOptions>(
   key: string,
-  options: SecureStoreOptions = {}
-): Promise<string | null> {
+  options: R | EmptyObject = {}
+): Promise<SecureStoreGetFeedback<string, R>> {
   ensureValidKey(key);
   return await ExpoSecureStore.getValueWithKeyAsync(key, options);
 }
@@ -166,11 +237,11 @@ export async function getItemAsync(
  *
  * @return A promise that rejects if value cannot be stored on the device.
  */
-export async function setItemAsync(
+export async function setItemAsync<R extends SecureStoreOptions>(
   key: string,
   value: string,
-  options: SecureStoreOptions = {}
-): Promise<void> {
+  options: R | EmptyObject = {}
+): Promise<SecureStoreSetFeedback<R>> {
   ensureValidKey(key);
   if (!isValidValue(value)) {
     throw new Error(
@@ -178,7 +249,7 @@ export async function setItemAsync(
     );
   }
 
-  await ExpoSecureStore.setValueWithKeyAsync(value, key, options);
+  return await ExpoSecureStore.setValueWithKeyAsync(value, key, options);
 }
 
 /**
@@ -190,7 +261,11 @@ export async function setItemAsync(
  * @param options An [`SecureStoreOptions`](#securestoreoptions) object.
  *
  */
-export function setItem(key: string, value: string, options: SecureStoreOptions = {}): void {
+export function setItem<R extends SecureStoreOptions>(
+  key: string,
+  value: string,
+  options: R | EmptyObject = {}
+): SecureStoreSetFeedback<R> {
   ensureValidKey(key);
   if (!isValidValue(value)) {
     throw new Error(
@@ -211,7 +286,10 @@ export function setItem(key: string, value: string, options: SecureStoreOptions 
  * @return Previously stored value. It resolves with `null` if there is no entry
  * for the given key or if the key has been invalidated.
  */
-export function getItem(key: string, options: SecureStoreOptions = {}): string | null {
+export function getItem<R extends SecureStoreOptions>(
+  key: string,
+  options: R | EmptyObject = {}
+): SecureStoreGetFeedback<string, R> {
   ensureValidKey(key);
   return ExpoSecureStore.getValueWithKeySync(key, options);
 }

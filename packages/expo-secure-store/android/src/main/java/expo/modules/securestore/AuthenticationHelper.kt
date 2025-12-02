@@ -19,12 +19,12 @@ class AuthenticationHelper(
 ) {
   private var isAuthenticating = false
 
-  suspend fun authenticateCipher(cipher: Cipher, requiresAuthentication: Boolean, title: String): Cipher {
-    if (requiresAuthentication) {
-      return openAuthenticationPrompt(cipher, title).cryptoObject?.cipher
-        ?: throw AuthenticationException("Couldn't get cipher from authentication result")
+  suspend fun authenticateCipher(cipher: Cipher, title: String): BiometricPrompt.AuthenticationResult {
+    val promptResult = openAuthenticationPrompt(cipher, title)
+    if (promptResult.cryptoObject?.cipher == null) {
+      throw AuthenticationException("Couldn't get cipher from authentication result")
     }
-    return cipher
+    return promptResult
   }
 
   private suspend fun openAuthenticationPrompt(
