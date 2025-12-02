@@ -29,6 +29,10 @@ public final class SecureStoreModule: Module {
         throw InvalidKeyException()
       }
 
+      if options.requireAuthentication && options.forceAuthenticationOnSave {
+        try await triggerPolicy(options: options)
+      }
+
       return try set(value: value, with: key, options: options)
     }
 
@@ -140,6 +144,32 @@ public final class SecureStoreModule: Module {
       return true
     } else {
       throw KeyChainException(status)
+    }
+  }
+
+  @MainActor
+  private func triggerPolicy(options: SecureStoreOptions) async throws {
+    let isPolicyAvailable = options.enableDeviceFallback ? areDeviceCredentialsEnabled() : areBiometricsEnabled()
+
+    guard isPolicyAvailable else {
+      throw SecureStoreRuntimeError("No authentication method available")
+    }
+
+    let localAuthPolicy: LAPolicy = options.enableDeviceFallback ? .deviceOwnerAuthentication : .deviceOwnerAuthenticationWithBiometrics
+    let localizedReason: String = options.authenticationPrompt ?? "Authentication required"
+
+    let success: Bool = try await withCheckedThrowingContinuation { continuation in
+      LAContext().evaluatePolicy(localAuthPolicy, localizedReason: localizedReason) { success, error in
+        if let error = error {
+          continuation.resume(throwing: error)
+        } else {
+          continuation.resume(returning: success)
+        }
+      }
+    }
+
+    guard success else {
+      throw SecureStoreRuntimeError("Unable to authenticate")
     }
   }
 

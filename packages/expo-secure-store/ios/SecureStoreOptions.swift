@@ -15,4 +15,14 @@ internal struct SecureStoreOptions: Record {
 
   @Field
   var accessGroup: String?
+
+  @Field
+  var forceAuthenticationOnSave: Bool = false
+}
+
+struct SecureStoreRuntimeError: LocalizedError {
+  let errorDescription: String?
+  init(_ description: String) {
+    self.errorDescription = description
+  }
 }
