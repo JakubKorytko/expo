@@ -187,6 +187,10 @@ open class SecureStoreModule : Module() {
       return
     }
 
+    if (prefs.contains(keychainAwareKey) && options.failOnUpdate) {
+      throw WriteException("Key already exists", key, options.keychainService)
+    }
+
     try {
       if (keyIsInvalidated) {
         // Invalidated keys will block writing even though it's not possible to re-validate them

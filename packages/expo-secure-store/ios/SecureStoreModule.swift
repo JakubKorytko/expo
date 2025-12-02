@@ -118,6 +118,9 @@ public final class SecureStoreModule: Module {
       SecItemDelete(query(with: key, options: options, requireAuthentication: !options.requireAuthentication) as CFDictionary)
       return true
     case errSecDuplicateItem:
+     if options.failOnUpdate {
+        throw SecureStoreRuntimeError("Key already exists")
+      }
       return try update(value: value, with: key, options: options)
     default:
       throw KeyChainException(status)
