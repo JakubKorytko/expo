@@ -36,11 +36,11 @@ open class SecureStoreModule : Module() {
 
     AsyncFunction("setValueWithKeyAsync") Coroutine { value: String?, key: String?, options: SecureStoreOptions ->
       key ?: throw NullKeyException()
-      return@Coroutine narrowSecureStoreFeedback(SecureStoreFeedbackAction.SET, setItemImpl(key, value, options, false), options)
+      return@Coroutine narrowSecureStoreFeedback(SecureStoreFeedbackAction.SET, setItemImpl(key, value, options, false), options).value
     }
 
     AsyncFunction("getValueWithKeyAsync") Coroutine { key: String, options: SecureStoreOptions ->
-      return@Coroutine narrowSecureStoreFeedback(SecureStoreFeedbackAction.GET,getItemImpl(key, options), options)
+      return@Coroutine narrowSecureStoreFeedback(SecureStoreFeedbackAction.GET,getItemImpl(key, options), options).value
     }
 
     Function("setValueWithKeySync") { value: String?, key: String?, options: SecureStoreOptions ->
