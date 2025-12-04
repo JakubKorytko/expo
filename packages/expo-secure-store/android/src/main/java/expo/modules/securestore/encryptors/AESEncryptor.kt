@@ -36,6 +36,11 @@ import javax.crypto.spec.GCMParameterSpec
 class AESEncryptor : KeyBasedEncryptor<KeyStore.SecretKeyEntry> {
   override fun getKeyStoreAlias(options: SecureStoreOptions): String {
     val baseAlias = options.keychainService
+
+    if (baseAlias == SecureStoreModule.DEFAULT_KEYSTORE_ALIAS && options.enableDeviceFallback) {
+      return "$AES_CIPHER:${SecureStoreModule.DEFAULT_FALLBACK_KEYSTORE_ALIAS}"
+    }
+
     return "$AES_CIPHER:$baseAlias"
   }
 

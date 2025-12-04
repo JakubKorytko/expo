@@ -52,6 +52,11 @@ class HybridAESEncryptor(private var mContext: Context, private val mAESEncrypto
 
   override fun getKeyStoreAlias(options: SecureStoreOptions): String {
     val baseAlias = options.keychainService
+
+    if (baseAlias == SecureStoreModule.DEFAULT_KEYSTORE_ALIAS && options.enableDeviceFallback) {
+      return "$RSA_CIPHER:${SecureStoreModule.DEFAULT_FALLBACK_KEYSTORE_ALIAS}"
+    }
+
     return "$RSA_CIPHER:$baseAlias"
   }
 

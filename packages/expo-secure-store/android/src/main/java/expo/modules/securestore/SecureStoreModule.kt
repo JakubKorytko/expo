@@ -420,6 +420,7 @@ open class SecureStoreModule : Module() {
     private const val KEYSTORE_ALIAS_PROPERTY = "keystoreAlias"
     const val USES_KEYSTORE_SUFFIX_PROPERTY = "usesKeystoreSuffix"
     const val DEFAULT_KEYSTORE_ALIAS = "key_v1"
+    const val DEFAULT_FALLBACK_KEYSTORE_ALIAS = "fallback_key_v1"
     const val AUTHENTICATED_KEYSTORE_SUFFIX = "keystoreAuthenticated"
     const val UNAUTHENTICATED_KEYSTORE_SUFFIX = "keystoreUnauthenticated"
   }
