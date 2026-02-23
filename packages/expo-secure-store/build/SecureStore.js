@@ -80,7 +80,7 @@ export async function deleteItemAsync(key, options = {}) {
  *
  * > Keys are invalidated by the system when biometrics change, such as adding a new fingerprint or changing the face profile used for face recognition.
  * > After a key has been invalidated, it becomes impossible to read its value.
- * > This only applies to values stored with `requireAuthentication` set to `true`.
+ * > This only applies to values stored with `requireAuthentication` not set to `false`.
  */
 export async function getItemAsync(key, options = {}) {
     ensureValidKey(key);
@@ -105,7 +105,7 @@ export async function setItemAsync(key, value, options = {}) {
 }
 /**
  * Stores a key–value pair synchronously.
- * > **Note:** This function blocks the JavaScript thread, so the application may not be interactive when the `requireAuthentication` option is set to `true` until the user authenticates.
+ * > **Note:** This function blocks the JavaScript thread, so the application may not be interactive when the `requireAuthentication` option is not set to `false` until the user authenticates.
  *
  * @param key The key to associate with the stored value. Keys may contain alphanumeric characters, `.`, `-`, and `_`.
  * @param value The value to store.
@@ -122,7 +122,7 @@ export function setItem(key, value, options = {}) {
 /**
  * Synchronously reads the stored value associated with the provided key.
  * > **Note:** This function blocks the JavaScript thread, so the application may not be interactive when reading a value with `requireAuthentication`
- * > option set to `true` until the user authenticates.
+ * > option not set to `false` until the user authenticates.
  * @param key The key that was used to store the associated value.
  * @param options An [`SecureStoreOptions`](#securestoreoptions) object.
  *

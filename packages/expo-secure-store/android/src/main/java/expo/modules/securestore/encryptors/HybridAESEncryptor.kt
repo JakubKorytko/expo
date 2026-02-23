@@ -52,7 +52,7 @@ class HybridAESEncryptor(private var mContext: Context, private val mAESEncrypto
   override fun getKeyStoreAlias(options: SecureStoreOptions): String {
     val baseAlias = options.keychainService
 
-    if (baseAlias == SecureStoreModule.DEFAULT_KEYSTORE_ALIAS && options.enableDeviceFallback) {
+    if (baseAlias == SecureStoreModule.DEFAULT_KEYSTORE_ALIAS && options.isUserPresenceRequired) {
       return "$RSA_CIPHER:${SecureStoreModule.DEFAULT_FALLBACK_KEYSTORE_ALIAS}"
     }
 
@@ -75,7 +75,7 @@ class HybridAESEncryptor(private var mContext: Context, private val mAESEncrypto
     requireAuthentication: Boolean,
     authenticationPrompt: String,
     authenticationHelper: AuthenticationHelper,
-    enableDeviceFallback: Boolean,
+    isUserPresenceRequired: Boolean,
   ): JSONObject {
     // This should never be called after we dropped Android SDK 22 support.
     throw EncryptException(

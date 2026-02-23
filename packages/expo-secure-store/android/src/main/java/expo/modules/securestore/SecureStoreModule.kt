@@ -136,7 +136,7 @@ open class SecureStoreModule : Module() {
 
     val scheme = encryptedItem.optString(SCHEME_PROPERTY).takeIf { it.isNotEmpty() }
       ?: throw DecryptException("Could not find the encryption scheme used for key: $key", key, options.keychainService)
-    val requireAuthentication = encryptedItem.optBoolean(AuthenticationHelper.REQUIRE_AUTHENTICATION_PROPERTY, false)
+    val requireAuthentication = encryptedItem.optString(AuthenticationHelper.REQUIRE_AUTHENTICATION_PROPERTY, null)
     val usesKeystoreSuffix = encryptedItem.optBoolean(USES_KEYSTORE_SUFFIX_PROPERTY, false)
 
     try {
@@ -200,7 +200,7 @@ open class SecureStoreModule : Module() {
       if (keyIsInvalidated) {
         // Invalidated keys will block writing even though it's not possible to re-validate them
         // so we remove them before saving.
-        val alias = mAESEncryptor.getExtendedKeyStoreAlias(options, options.requireAuthentication)
+        val alias = mAESEncryptor.getExtendedKeyStoreAlias(options, options.isAuthenticationRequired)
         removeKeyFromKeystore(alias, options.keychainService)
       }
 
@@ -209,8 +209,8 @@ open class SecureStoreModule : Module() {
        use in the encrypted JSON item so that we know how to decode and decrypt it when reading
        back a value.
        */
-      val secretKeyEntry: SecretKeyEntry = getOrCreateKeyEntry(SecretKeyEntry::class.java, mAESEncryptor, options, options.requireAuthentication)
-      val encryptedItem = mAESEncryptor.createEncryptedItem(value, secretKeyEntry, options.requireAuthentication, options.authenticationPrompt, authenticationHelper, options.enableDeviceFallback)
+      val secretKeyEntry: SecretKeyEntry = getOrCreateKeyEntry(SecretKeyEntry::class.java, mAESEncryptor, options, options.isAuthenticationRequired)
+      val encryptedItem = mAESEncryptor.createEncryptedItem(value, secretKeyEntry, options.isAuthenticationRequired, options.authenticationPrompt, authenticationHelper, options.isUserPresenceRequired)
       encryptedItem.put(SCHEME_PROPERTY, AESEncryptor.NAME)
       saveEncryptedItem(encryptedItem, prefs, keychainAwareKey, options.requireAuthentication, options.keychainService)
 
@@ -233,7 +233,7 @@ open class SecureStoreModule : Module() {
     }
   }
 
-  private fun saveEncryptedItem(encryptedItem: JSONObject, prefs: SharedPreferences, key: String, requireAuthentication: Boolean, keychainService: String): Boolean {
+  private fun saveEncryptedItem(encryptedItem: JSONObject, prefs: SharedPreferences, key: String, requireAuthentication: String?, keychainService: String): Boolean {
     // We need a way to recognize entries that have been saved under an alias created with getExtendedKeychain
     encryptedItem.put(USES_KEYSTORE_SUFFIX_PROPERTY, true)
     // In order to be able to have the same keys under different keychains
@@ -291,11 +291,11 @@ open class SecureStoreModule : Module() {
       }
 
       val entryKeychainService = jsonEntry.optString(KEYSTORE_ALIAS_PROPERTY) ?: continue
-      val requireAuthentication = jsonEntry.optBoolean(AuthenticationHelper.REQUIRE_AUTHENTICATION_PROPERTY, false)
+      val requireAuthentication = jsonEntry.optString(AuthenticationHelper.REQUIRE_AUTHENTICATION_PROPERTY, null)
 
       // Entries which don't require authentication use separate keychains which can't be invalidated,
       // so we shouldn't delete them.
-      if (requireAuthentication && keychainService == entryKeychainService) {
+      if (requireAuthentication != null && keychainService == entryKeychainService) {
         sharedPreferences.edit().remove(key).apply()
         Log.w(TAG, "Removing entry: $key due to the encryption key being deleted")
       }

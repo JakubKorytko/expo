@@ -62,28 +62,26 @@ function SecureStoreView() {
     []
   );
 
-  const enableDeviceFallback = React.useMemo(
-    () => forceDeviceFallback || canUseFallback,
-    [canUseFallback, forceDeviceFallback]
-  );
+  const authMode = React.useMemo(() => {
+    if (!requireAuth) return false;
+    return forceDeviceFallback || canUseFallback ? 'userPresence' : 'biometry';
+  }, [requireAuth, canUseFallback, forceDeviceFallback]);
 
   const storeOptions = React.useMemo<SecureStore.SecureStoreOptions>(
     () => ({
       keychainService: service,
-      requireAuthentication: requireAuth,
-      authenticationPrompt: requireAuth ? 'Authenticate' : undefined,
-      enableDeviceFallback,
+      requireAuthentication: authMode,
+      authenticationPrompt: authMode ? 'Authenticate' : undefined,
     }),
-    [requireAuth, service]
+    [authMode, service]
   );
 
   async function storeValueAsync(value: string, key: string) {
     try {
       await SecureStore.setItemAsync(key, value, {
         keychainService: service,
-        requireAuthentication: requireAuth,
-        authenticationPrompt: 'Authenticate',
-        enableDeviceFallback,
+        requireAuthentication: authMode,
+        authenticationPrompt: authMode ? 'Authenticate' : undefined,
       });
       Alert.alert('Success!', 'Value: ' + value + ', stored successfully for key: ' + key, [
         { text: 'OK', onPress: () => {} },
@@ -97,9 +95,8 @@ function SecureStoreView() {
     try {
       SecureStore.setItem(key, value, {
         keychainService: service,
-        requireAuthentication: requireAuth,
-        authenticationPrompt: 'Authenticate',
-        enableDeviceFallback,
+        requireAuthentication: authMode,
+        authenticationPrompt: authMode ? 'Authenticate' : undefined,
       });
       Alert.alert('Success!', 'Value: ' + value + ', stored successfully for key: ' + key, [
         { text: 'OK', onPress: () => {} },
@@ -113,9 +110,8 @@ function SecureStoreView() {
     try {
       const fetchedValue = await SecureStore.getItemAsync(key, {
         keychainService: service,
-        requireAuthentication: requireAuth,
-        authenticationPrompt: 'Authenticate',
-        enableDeviceFallback,
+        requireAuthentication: authMode,
+        authenticationPrompt: authMode ? 'Authenticate' : undefined,
       });
       Alert.alert('Success!', 'Fetched value: ' + fetchedValue, [
         { text: 'OK', onPress: () => {} },
@@ -129,9 +125,8 @@ function SecureStoreView() {
     try {
       const fetchedValue = SecureStore.getItem(key, {
         keychainService: service,
-        requireAuthentication: requireAuth,
-        authenticationPrompt: 'Authenticate',
-        enableDeviceFallback,
+        requireAuthentication: authMode,
+        authenticationPrompt: authMode ? 'Authenticate' : undefined,
       });
       Alert.alert('Success!', 'Fetched value: ' + fetchedValue, [
         { text: 'OK', onPress: () => {} },

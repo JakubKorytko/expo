@@ -41,12 +41,14 @@ public final class SecureStoreModule: Module {
     }
 
     AsyncFunction("deleteValueWithKeyAsync") { (key: String, options: SecureStoreOptions) in
-      let noAuthSearchDictionary = query(with: key, options: options, requireAuthentication: false)
-      let authSearchDictionary = query(with: key, options: options, requireAuthentication: true)
+      let noAuthSearchDictionary = query(with: key, options: options, requireAuthentication: nil)
+      let authSearchDictionary = query(with: key, options: options, requireAuthentication: "biometry")
+      let userPresenceSearchDictionary = query(with: key, options: options, requireAuthentication: "userPresence")
       let legacySearchDictionary = query(with: key, options: options)
 
       SecItemDelete(legacySearchDictionary as CFDictionary)
       SecItemDelete(authSearchDictionary as CFDictionary)
+      SecItemDelete(userPresenceSearchDictionary as CFDictionary)
       SecItemDelete(noAuthSearchDictionary as CFDictionary)
     }
 
@@ -80,12 +82,16 @@ public final class SecureStoreModule: Module {
       throw InvalidKeyException()
     }
 
-    if let unauthenticatedItem = try searchKeyChain(with: key, options: options, requireAuthentication: false) {
+    if let unauthenticatedItem = try searchKeyChain(with: key, options: options, requireAuthentication: nil) {
       return String(data: unauthenticatedItem, encoding: .utf8)
     }
 
-    if let authenticatedItem = try searchKeyChain(with: key, options: options, requireAuthentication: true) {
-      return String(data: authenticatedItem, encoding: .utf8)
+    if let biometryItem = try searchKeyChain(with: key, options: options, requireAuthentication: "biometry") {
+      return String(data: biometryItem, encoding: .utf8)
+    }
+
+    if let userPresenceItem = try searchKeyChain(with: key, options: options, requireAuthentication: "userPresence") {
+      return String(data: userPresenceItem, encoding: .utf8)
     }
 
     if let legacyItem = try searchKeyChain(with: key, options: options) {
@@ -103,17 +109,17 @@ public final class SecureStoreModule: Module {
 
     let accessibility = attributeWith(options: options)
 
-    if !options.requireAuthentication {
+    if !options.isAuthenticationRequired {
       setItemQuery[kSecAttrAccessible as String] = accessibility
     } else {
-      if (!options.enableDeviceFallback) {
+      if options.requireAuthentication != "userPresence" {
         guard let _ = Bundle.main.infoDictionary?["NSFaceIDUsageDescription"] as? String else {
           throw MissingPlistKeyException()
         }
       }
 
       var error: Unmanaged<CFError>? = nil
-      let accessControlFlag: SecAccessControlCreateFlags = options.enableDeviceFallback ? .userPresence : .biometryCurrentSet
+      let accessControlFlag: SecAccessControlCreateFlags = options.isUserPresenceRequired ? .userPresence : .biometryCurrentSet
 
       guard let accessOptions = SecAccessControlCreateWithFlags(kCFAllocatorDefault, accessibility, accessControlFlag, &error) else {
         let errorCode = error.map { CFErrorGetCode($0.takeRetainedValue()) }
@@ -128,7 +134,8 @@ public final class SecureStoreModule: Module {
     case errSecSuccess:
       // On success we want to remove the other key alias and legacy key (if they exist) to avoid conflicts during reads
       SecItemDelete(query(with: key, options: options) as CFDictionary)
-      SecItemDelete(query(with: key, options: options, requireAuthentication: !options.requireAuthentication) as CFDictionary)
+      SecItemDelete(query(with: key, options: options, requireAuthentication: "biometry") as CFDictionary)
+      SecItemDelete(query(with: key, options: options, requireAuthentication: "userPresence") as CFDictionary)
       return true
     case errSecDuplicateItem:
       return try update(value: value, with: key, options: options)
@@ -156,7 +163,7 @@ public final class SecureStoreModule: Module {
     }
   }
 
-  private func searchKeyChain(with key: String, options: SecureStoreOptions, requireAuthentication: Bool? = nil) throws -> Data? {
+  private func searchKeyChain(with key: String, options: SecureStoreOptions, requireAuthentication: String? = nil) throws -> Data? {
     var query = query(with: key, options: options, requireAuthentication: requireAuthentication)
 
     query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -182,10 +189,17 @@ public final class SecureStoreModule: Module {
     }
   }
 
-  private func query(with key: String, options: SecureStoreOptions, requireAuthentication: Bool? = nil) -> [String: Any] {
+  private func query(with key: String, options: SecureStoreOptions, requireAuthentication: String? = nil) -> [String: Any] {
     var service = options.keychainService ?? "app"
-    if let requireAuthentication {
-      service.append(":\(requireAuthentication ? "auth" : "no-auth")")
+    switch requireAuthentication {
+    case "biometry":
+      service.append(":auth")
+    case "userPresence":
+      service.append(":userPresence")
+    case nil:
+      service.append(":no-auth")
+    default:
+      break
     }
 
     let encodedKey = Data(key.utf8)

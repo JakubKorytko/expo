@@ -35,7 +35,7 @@ class AESEncryptor : KeyBasedEncryptor<KeyStore.SecretKeyEntry> {
   override fun getKeyStoreAlias(options: SecureStoreOptions): String {
     val baseAlias = options.keychainService
 
-    if (baseAlias == SecureStoreModule.DEFAULT_KEYSTORE_ALIAS && options.enableDeviceFallback) {
+    if (baseAlias == SecureStoreModule.DEFAULT_KEYSTORE_ALIAS && options.isUserPresenceRequired) {
       return "$AES_CIPHER:${SecureStoreModule.DEFAULT_FALLBACK_KEYSTORE_ALIAS}"
     }
 
@@ -59,18 +59,18 @@ class AESEncryptor : KeyBasedEncryptor<KeyStore.SecretKeyEntry> {
   @RequiresApi(Build.VERSION_CODES.R)
   @Throws(GeneralSecurityException::class)
   override fun initializeKeyStoreEntry(keyStore: KeyStore, options: SecureStoreOptions): KeyStore.SecretKeyEntry {
-    val extendedKeystoreAlias = getExtendedKeyStoreAlias(options, options.requireAuthentication)
+    val extendedKeystoreAlias = getExtendedKeyStoreAlias(options, options.isAuthenticationRequired)
     val keyPurposes = KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
 
     val authType =
-      if (options.enableDeviceFallback) KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
+      if (options.isUserPresenceRequired) KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
       else KeyProperties.AUTH_BIOMETRIC_STRONG
 
     val algorithmSpec: AlgorithmParameterSpec = KeyGenParameterSpec.Builder(extendedKeystoreAlias, keyPurposes)
       .setKeySize(AES_KEY_SIZE_BITS)
       .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
       .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-      .setUserAuthenticationRequired(options.requireAuthentication)
+      .setUserAuthenticationRequired(options.isAuthenticationRequired)
       .setUserAuthenticationParameters(0, authType)
       .build()
 
@@ -90,14 +90,17 @@ class AESEncryptor : KeyBasedEncryptor<KeyStore.SecretKeyEntry> {
     requireAuthentication: Boolean,
     authenticationPrompt: String,
     authenticationHelper: AuthenticationHelper,
-    enableDeviceFallback: Boolean,
+    isUserPresenceRequired: Boolean,
   ): JSONObject {
     val secretKey = keyStoreEntry.secretKey
     val cipher = Cipher.getInstance(AES_CIPHER)
     cipher.init(Cipher.ENCRYPT_MODE, secretKey)
 
     val gcmSpec = cipher.parameters.getParameterSpec(GCMParameterSpec::class.java)
-    val authenticatedCipher = authenticationHelper.authenticateCipher(cipher, requireAuthentication, authenticationPrompt, enableDeviceFallback)
+    val requireAuthenticationString = if (requireAuthentication) {
+      if (isUserPresenceRequired) "userPresence" else "biometry"
+    } else null
+    val authenticatedCipher = authenticationHelper.authenticateCipher(cipher, requireAuthenticationString, authenticationPrompt)
 
     return createEncryptedItemWithCipher(plaintextValue, authenticatedCipher, gcmSpec)
   }
@@ -134,13 +137,13 @@ class AESEncryptor : KeyBasedEncryptor<KeyStore.SecretKeyEntry> {
     val ivBytes = Base64.decode(ivString, Base64.DEFAULT)
     val gcmSpec = GCMParameterSpec(authenticationTagLength, ivBytes)
     val cipher = Cipher.getInstance(AES_CIPHER)
-    val requiresAuthentication = encryptedItem.optBoolean(AuthenticationHelper.REQUIRE_AUTHENTICATION_PROPERTY)
+    val requiresAuthentication = encryptedItem.optString(AuthenticationHelper.REQUIRE_AUTHENTICATION_PROPERTY, null)
 
     if (authenticationTagLength < MIN_GCM_AUTHENTICATION_TAG_LENGTH) {
       throw DecryptException("Authentication tag length must be at least $MIN_GCM_AUTHENTICATION_TAG_LENGTH bits long", key, options.keychainService)
     }
     cipher.init(Cipher.DECRYPT_MODE, keyStoreEntry.secretKey, gcmSpec)
-    val unlockedCipher = authenticationHelper.authenticateCipher(cipher, requiresAuthentication, options.authenticationPrompt, options.enableDeviceFallback)
+    val unlockedCipher = authenticationHelper.authenticateCipher(cipher, requiresAuthentication, options.authenticationPrompt)
     return String(unlockedCipher.doFinal(ciphertextBytes), StandardCharsets.UTF_8)
   }
 
